@@ -1,0 +1,204 @@
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local LocalPlayer = Players.LocalPlayer
+local Camera = workspace.CurrentCamera
+local Teams = game:GetService("Teams")
+
+-- Define Teams
+local TeamA = Instance.new("Team")
+TeamA.Name = "TeamA"
+TeamA.TeamColor = BrickColor.new("Bright red")
+TeamA.Parent = Teams
+
+local TeamB = Instance.new("Team")
+TeamB.Name = "TeamB"
+TeamB.TeamColor = BrickColor.new("Bright blue")
+TeamB.Parent = Teams
+
+-- UI Setup
+local GuesserUI = Instance.new("ScreenGui")
+GuesserUI.Name = "GuesserUI"
+GuesserUI.Parent = LocalPlayer:WaitForChild("PlayerGui")
+
+-- Title Label
+local titleLabel = Instance.new("TextLabel")
+titleLabel.Name = "GuesserTitle"
+titleLabel.Text = "Guesser"
+titleLabel.Size = UDim2.new(0.3, 0, 0, 40)
+titleLabel.Position = UDim2.new(0.35, 0, 0, 10)
+titleLabel.BackgroundTransparency = 1
+titleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+titleLabel.Font = Enum.Font.SourceSansBold
+titleLabel.TextSize = 20
+titleLabel.Parent = GuesserUI
+
+-- TextBox for Team Input
+local teamInputBox = Instance.new("TextBox")
+teamInputBox.Name = "TeamInputBox"
+teamInputBox.PlaceholderText = "Enter Team Name"
+teamInputBox.Size = UDim2.new(0.3, 0, 0, 30)
+teamInputBox.Position = UDim2.new(0.35, 0, 0.1, 0)
+teamInputBox.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+teamInputBox.TextColor3 = Color3.fromRGB(255, 255, 255)
+teamInputBox.Font = Enum.Font.SourceSans
+teamInputBox.TextSize = 14
+teamInputBox.Parent = GuesserUI
+
+-- Submit Button
+local submitButton = Instance.new("TextButton")
+submitButton.Name = "SubmitButton"
+submitButton.Text = "Set Team"
+submitButton.Size = UDim2.new(0.3, 0, 0, 30)
+submitButton.Position = UDim2.new(0.35, 0, 0.2, 0)
+submitButton.BackgroundColor3 = Color3.fromRGB(0, 150, 0)
+submitButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+submitButton.Font = Enum.Font.SourceSansBold
+submitButton.TextSize = 14
+submitButton.Parent = GuesserUI
+
+local ESP_ENABLED = true
+local AIM_ENABLED = true
+local AIM_SMOOTH = 0.2
+local AIM_FOV = 100
+local SELECTED_TEAM = "TeamB"  -- Default team
+
+-- Function to create a new text label
+local function NewText()
+    local textLabel = Instance.new("TextLabel")
+    textLabel.BackgroundTransparency = 1
+    textLabel.Size = UDim2.new(0, 100, 0, 20)
+    textLabel.Parent = GuesserUI
+    return textLabel
+end
+
+-- Function to set up ESP
+local function SetupESP(player)
+    if player.Team and player.Team.Name == SELECTED_TEAM then
+        local espOutline = Instance.new("BoxHandleAdornment")
+        espOutline.Adornee = player.Character:WaitForChild("HumanoidRootPart")
+        espOutline.Size = player.Character.HumanoidRootPart.Size * 1.2 -- Slightly larger
+        espOutline.ZIndex = 0
+        espOutline.Color3 = Color3.fromRGB(0, 255, 0) -- Green color for ESP
+        espOutline.Transparency = 0.5
+        espOutline.Parent = player.Character
+
+        local hpText = NewText()
+        local distanceText = NewText()
+
+        RunService.RenderStepped:Connect(function()
+            if player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+                local rootPart = player.Character.HumanoidRootPart
+                local screenPos, onScreen = Camera:WorldToScreenPoint(rootPart.Position)
+
+                if onScreen then
+                    espOutline.Adornee = rootPart
+
+                    hpText.Position = UDim2.new(0, screenPos.X, 0, screenPos.Y - 40)
+                    hpText.Text = "HP: " .. player.Character.Humanoid.Health .. "/" .. player.Character.Humanoid.MaxHealth
+
+                    -- Calculate distance
+                    local dist = (LocalPlayer.Character.HumanoidRootPart.Position - rootPart.Position).Magnitude
+                    distanceText.Position = UDim2.new(0, screenPos.X, 0, screenPos.Y - 20)
+                    distanceText.Text = math.floor(dist) .. " studs"
+                else
+                    espOutline.Adornee = nil
+                    hpText.Visible = false
+                    distanceText.Visible = false
+                end
+            end
+        end)
+    end
+end
+
+-- Function for aimbot
+local function Aimbot()
+    if not AIM_ENABLED then return end
+
+    local closestPlayer
+    local closestDistance = AIM_FOV
+
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer and player.Team and player.Team.Name == SELECTED_TEAM and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+            local screenPos, onScreen = Camera:WorldToScreenPoint(player.Character.HumanoidRootPart.Position)
+            local dist = (Vector2.new(screenPos.X, screenPos.Y) - Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)).Magnitude
+
+            if onScreen and dist < closestDistance then
+                closestDistance = dist
+                closestPlayer = player
+            end
+        end
+    end
+
+    if closestPlayer then
+        local targetPos = closestPlayer.Character.HumanoidRootPart.Position
+        local aimDirection = (targetPos - LocalPlayer.Character.HumanoidRootPart.Position).unit
+        local cameraRotation = CFrame.new(Camera.CFrame.Position, Camera.CFrame.Position + aimDirection)
+
+        Camera.CFrame = Camera.CFrame:Lerp(cameraRotation, AIM_SMOOTH)
+    end
+end
+
+-- Mini-map Radar
+local radarFrame = Instance.new("Frame")
+radarFrame.Size = UDim2.new(0, 200, 0, 200)
+radarFrame.Position = UDim2.new(1, -210, 0.1, 0) -- Positioned in the right corner
+radarFrame.BackgroundTransparency = 0.5
+radarFrame.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+radarFrame.Parent = GuesserUI
+
+local function UpdateRadar()
+    for _, radarDot in pairs(radarFrame:GetChildren()) do
+        if radarDot:IsA("Frame") then
+            radarDot:Destroy() -- Clean old dots
+        end
+    end
+
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer and player.Team and player.Team.Name == SELECTED_TEAM and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+            local rootPos = player.Character.HumanoidRootPart.Position
+
+            -- Calculate position on radar (scale down for visualization)
+            local radarDot = Instance.new("Frame")
+            radarDot.Size = UDim2.new(0, 5, 0, 5) -- Small dot
+            radarDot.BackgroundColor3 = Color3.fromRGB(255, 0, 0) -- Red dot for enemies
+            radarDot.Position = UDim2.new(0, (rootPos.X * 0.1) + 95, 0, (rootPos.Z * 0.1) + 95) -- Adjusted for radar position
+            radarDot.Parent = radarFrame
+        end
+    end
+end
+
+-- Hotkey Configurations
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if gameProcessed then return end
+
+    if input.KeyCode == Enum.KeyCode.E then  -- Toggle ESP
+        ESP_ENABLED = not ESP_ENABLED
+    elseif input.KeyCode == Enum.KeyCode.Q then  -- Toggle Aimbot
+        AIM_ENABLED = not AIM_ENABLED
+    end
+end)
+
+-- Team Submission Handler
+submitButton.MouseButton1Click:Connect(function()
+    if teamInputBox.Text ~= "" then
+        SELECTED_TEAM = teamInputBox.Text
+        print("Selected team set to: " .. SELECTED_TEAM)
+    else
+        print("Please enter a valid team name.")
+    end
+end)
+
+-- Main Loop
+RunService.RenderStepped:Connect(function()
+    if ESP_ENABLED then
+        for _, player in ipairs(Players:GetPlayers()) do
+            SetupESP(player) -- Set up ESP for players on the selected team
+        end
+    end
+
+    Aimbot() -- Call the aimbot function
+    UpdateRadar() -- Call the radar function
+end)
+
+print("Guesser UI initialized with minimalistic design!")
